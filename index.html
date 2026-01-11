@@ -96,7 +96,6 @@
             color: #10b981;
         }
 
-        /* Estilo para el panel flotante en la esquina superior izquierda */
         .floating-control {
             position: fixed;
             top: 20px;
@@ -111,20 +110,16 @@
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center p-4">
 
-    <!-- Panel de Control de Selección Forzada (AHORA FLOTANTE A LA IZQUIERDA) -->
+    <!-- Control de Selección Forzada -->
     <div class="floating-control glass-card p-4 border-emerald-500/20 bg-emerald-500/5 shadow-2xl">
         <h3 class="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest mb-3">Control de Selección</h3>
         <p class="text-[9px] opacity-60 mb-2 italic">Forzar resultado:</p>
-        <div id="forceSelectionList" class="space-y-1 overflow-y-auto pr-2 custom-scrollbar flex-1">
-            <!-- Botones de selección -->
-        </div>
+        <div id="forceSelectionList" class="space-y-1 overflow-y-auto pr-2 custom-scrollbar flex-1"></div>
     </div>
 
     <div class="max-w-7xl w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
-        <!-- Panel Izquierdo (Originalmente contenía el control, ahora solo modos e historial) -->
         <div class="lg:col-span-3 space-y-6 order-3 lg:order-1">
-            <!-- Selector de Modos -->
             <div class="glass-card p-6">
                 <h3 class="text-xs font-semibold opacity-50 uppercase tracking-widest mb-4">Modo de Juego</h3>
                 <div class="grid grid-cols-1 gap-2">
@@ -137,14 +132,12 @@
                 </div>
             </div>
 
-            <!-- Historial Breve -->
             <div class="glass-card p-6">
                 <h3 class="text-xs font-semibold opacity-50 uppercase tracking-widest mb-4">Registro</h3>
                 <ul id="history" class="space-y-2 text-[11px] max-h-48 overflow-y-auto pr-2 custom-scrollbar"></ul>
             </div>
         </div>
 
-        <!-- Ruleta Central -->
         <div class="lg:col-span-5 flex flex-col items-center order-1 lg:order-2 self-center">
             <div class="canvas-container scale-75 md:scale-100">
                 <svg id="wheel-pointer" width="40" height="40" viewBox="0 0 40 40">
@@ -158,7 +151,6 @@
             </button>
         </div>
 
-        <!-- Lista de Participantes (Derecha) -->
         <div class="lg:col-span-4 glass-card p-6 order-2 lg:order-3 h-full lg:min-h-[600px] flex flex-col">
             <h2 class="text-xl font-semibold mb-4 text-yellow-500 flex justify-between items-center">
                 Participantes
@@ -181,7 +173,6 @@
 
     </div>
 
-    <!-- Modal de Ganador -->
     <div id="customModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
         <div class="glass-card p-8 max-w-md w-full text-center border-yellow-500/30">
             <h2 id="modalTitle" class="text-3xl font-bold text-yellow-500 mb-4 uppercase tracking-tighter">¡TITULO!</h2>
@@ -362,20 +353,35 @@
             spinBtn.innerText = "Girando...";
             
             spinTime = 0;
-            spinTimeTotal = 4000; // 4 segundos de giro
+            spinTimeTotal = 4000;
+            
+            // NORMALIZACIÓN CRÍTICA: Aseguramos que el ángulo de inicio sea el actual
+            // pero limpiando vueltas completas acumuladas.
+            startAngle = startAngle % (Math.PI * 2);
             
             const baseRotations = (Math.PI * 2) * (5 + Math.floor(Math.random() * 3));
             
             if (forcedWinnerIndex !== null) {
-                const segmentAngle = forcedWinnerIndex * arc;
-                const centerOfSegment = segmentAngle + (arc / 2);
-                let targetRotation = (1.5 * Math.PI) - centerOfSegment - (startAngle % (Math.PI * 2));
-                while (targetRotation < 0) targetRotation += (Math.PI * 2);
-                spinAngleStart = baseRotations + targetRotation;
+                // El indicador está arriba (270 grados o 1.5 * PI).
+                // Queremos que el segmento 'forcedWinnerIndex' termine exactamente ahí.
+                // Posición actual del centro del segmento elegido: startAngle + (index * arc) + (arc/2)
+                
+                const targetCenter = (forcedWinnerIndex * arc) + (arc / 2);
+                
+                // Calculamos cuánto debemos rotar para que 'targetCenter' llegue a '1.5 * PI'
+                // La fórmula es: Distancia = (PosiciónDeseadaIndicador - PosiciónActualSegmento)
+                let extraRotation = (1.5 * Math.PI) - targetCenter - startAngle;
+                
+                // Normalizamos para que siempre gire hacia adelante
+                while (extraRotation < 0) extraRotation += (Math.PI * 2);
+                
+                spinAngleStart = baseRotations + extraRotation;
             } else {
                 spinAngleStart = baseRotations + (Math.random() * Math.PI * 2);
             }
 
+            // Guardamos el ángulo base para la animación suave
+            window.initialSpinAngle = startAngle;
             rotateWheel();
         }
 
@@ -389,9 +395,8 @@
             const ratio = spinTime / spinTimeTotal;
             const ease = 1 - Math.pow(1 - ratio, 3);
             
-            if (!window.initialAngle) window.initialAngle = startAngle;
-            const currentTotalRotation = spinAngleStart * ease;
-            startAngle = window.initialAngle + currentTotalRotation;
+            // Calculamos el ángulo actual sumando el progreso al ángulo inicial guardado
+            startAngle = window.initialSpinAngle + (spinAngleStart * ease);
             
             updateWheel();
             spinTimeout = setTimeout(rotateWheel, 30);
@@ -402,13 +407,12 @@
             spinTimeout = null;
             spinBtn.disabled = false;
             spinBtn.innerText = "Girar Ruleta";
-            window.initialAngle = null;
+            window.initialSpinAngle = null;
 
-            const degrees = (startAngle * 180 / Math.PI);
-            const arcd = arc * 180 / Math.PI;
-            
-            const index = Math.floor((270 - (degrees % 360) + 360) % 360 / arcd);
-            const finalIndex = Math.min(Math.max(index, 0), participants.length - 1);
+            // Determinamos el ganador real basándonos en la posición física final
+            const finalNormalized = (startAngle % (Math.PI * 2) + (Math.PI * 2)) % (Math.PI * 2);
+            const relativeToPointer = (1.5 * Math.PI - finalNormalized + (Math.PI * 2)) % (Math.PI * 2);
+            const finalIndex = Math.floor(relativeToPointer / arc) % participants.length;
             
             const selected = participants[finalIndex];
             
